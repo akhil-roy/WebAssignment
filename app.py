@@ -80,6 +80,7 @@ def display():
 @app.route("/send_summary", methods=["POST"])
 def send_summary():
     date_filter = request.form.get("date")
+    recipientt_email = request.form.get("email")
 
     # Fetch summary data
     summary = db.session.query(Order.restaurant_name, db.func.count(Order.id)).filter_by(order_date=date_filter).group_by(Order.restaurant_name).all()
@@ -92,7 +93,7 @@ def send_summary():
         summary_html += "</table>"
 
         # Send email
-        msg = Message("Date-wise Order Summary", sender="your-email@gmail.com", recipients=["recipient-email@gmail.com"])
+        msg = Message("Date-wise Order Summary", sender="akhilchathanattu@gmail.com", recipients=recipientt_email)
         msg.html = summary_html
         mail.send(msg)
 
