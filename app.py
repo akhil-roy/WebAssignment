@@ -1,5 +1,7 @@
 import os
 import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
@@ -77,31 +79,45 @@ def display():
     orders = Order.query.paginate(page=page, per_page=per_page)
     return render_template("index.html", orders=orders)
 
+def send_email(recipient, subject, body):
+    """Send email using smtplib instead of Flask-Mail"""
+    sender_email = os.getenv("MAIL_USERNAME")
+    sender_password = os.getenv("MAIL_PASSWORD")
+    smtp_server = os.getenv("MAIL_SERVER")
+    smtp_port = int(os.getenv("MAIL_PORT"))
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = recipient
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, recipient, msg.as_string())
+        flash("Email sent successfully!", "success")
+    except Exception as e:
+        flash(f"Failed to send email: {e}", "danger")
+
 @app.route("/send_summary", methods=["POST"])
 def send_summary():
     date_filter = request.form.get("date")
-    recipientt_email = request.form.get("email")
-
-    # Fetch summary data
+    recipient_email = request.form.get("email")
     summary = db.session.query(Order.restaurant_name, db.func.count(Order.id)).filter_by(order_date=date_filter).group_by(Order.restaurant_name).all()
 
     if summary:
-        # Prepare summary as an HTML table
-        summary_html = "<h3>Date-Wise Order Summary</h3><table border='1'><tr><th>Restaurant</th><th>Total Orders</th></tr>"
+        # Prepare summary as an email body
+        summary_text = f"Date-Wise Order Summary for {date_filter}:\n\n"
         for restaurant, count in summary:
-            summary_html += f"<tr><td>{restaurant}</td><td>{count}</td></tr>"
-        summary_html += "</table>"
+            summary_text += f"- {restaurant}: {count} orders\n"
+        
+        send_email(recipient_email, "Date-wise Order Summary", summary_text)
+        flash("Summary email sent successfully!")
+        return redirect(url_for('display'))
 
-        # Send email
-        msg = Message("Date-wise Order Summary", sender="akhilchathanattu@gmail.com", recipients=recipientt_email)
-        msg.html = summary_html
-        mail.send(msg)
-
-        flash("Summary sent successfully!")
-        return redirect(url_for('index'))
-
-    flash("No data available for this date")
-    return redirect(url_for('index'))
+    flash("No data available for this date!", "warning")
+    return render_template("index.html")
 
 @app.route("/filter", methods=["POST"])
 def filter_data():
